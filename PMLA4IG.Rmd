@@ -1,0 +1,137 @@
+---
+title: "Practical Machine Learning Assignment 4"
+author: "Igor Gamayun"
+date: "7/2/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+## Background  
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+## Data Source  
+
+The training data for this project are available here:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+
+## Data Processing 
+1.Libraries needed for the data processing
+```{r,echo=TRUE, results='hide', message=FALSE}
+#loading libraries
+library('knitr')
+library('caret')
+```
+
+2.Creating variables for training and test data
+```{r,echo=TRUE, results='hide', message=FALSE}
+# getting data into variables
+TrainData<-read.csv("pml-training.csv",sep = ',')
+TestData<-read.csv("pml-testing.csv",sep = ',')
+
+```
+3.Cleaning training data 
+```{r,echo=TRUE, results='hide', message=FALSE}
+data<-data.frame(TrainData)
+# choose columns without na
+data1<-data[,colSums(is.na(data))==0]
+# choose columns without empty cells
+data1<-data1[,colSums(data1=='')==0]
+
+# make the outcome character variable "classe" as factor variable
+data1$classe=as.factor(data1$classe)
+```
+For this particular data character variable user_name can be included as factor variable. However, to train more general model, we will exclude user_name along with other non-numerical variables (time...etc) from the analysis. Therefore all the model will be trained only on the data from movement sensors, which we will set as numeric variables.
+```{r,echo=TRUE, results='hide', message=FALSE}
+#extra variable we can compare two conditions: with the name as a variable and without
+data1$user_name=as.factor(data1$user_name)
+dataTrain1=data1[,-c(1:7)];
+
+dataTrain1[,-53]=sapply(dataTrain1[,-53],as.numeric)
+```
+## creating data partition
+```{r,echo=TRUE, results='hide', message=FALSE}
+#create data partition
+set.seed(12345)
+index<-createDataPartition(dataTrain1$classe,p=0.75, list=FALSE)
+dataTrain=dataTrain1[index,];
+dataTrainValidation=dataTrain1[-index,];
+```
+## setting training control parameters
+```{r,echo=TRUE, results='hide', message=FALSE}
+tc=trainControl(method='repeatedcv', number = 2)
+```
+
+
+## Training with SVM
+training with support vectors machine
+```{r,echo=TRUE, results='hide', message=FALSE}
+modfSVM<-train(classe~., data = dataTrain, method='svmLinear', trControl=tc, preProcess=c('center','scale'))
+```
+SVM model accuracy
+```{r,echo=TRUE, message=FALSE}
+modfSVM
+confusionMatrix(dataTrainValidation$classe,predict(modfSVM,dataTrainValidation[,-53]))
+
+```
+## Training with k nearest neighbors
+training with k nearest neighbors
+```{r,echo=TRUE, results='hide', message=FALSE}
+modfKNN<-train(classe~., data = dataTrain, method='knn', trControl=tc, preProcess=c('center','scale'))
+
+```
+k nearest neighbors model accuracy
+```{r,echo=TRUE, message=FALSE}
+modfKNN
+confusionMatrix(dataTrainValidation$classe,predict(modfKNN,dataTrainValidation[,-53]))
+
+```
+## Training with random forest
+training with random forest
+```{r rf,echo=TRUE, results='hide', message=FALSE}
+modfRF<-train(classe~., data = dataTrain, method='rf', trControl=tc, preProcess=c('center','scale'))
+
+
+```
+random forest model accuracy
+```{r rfAc,echo=TRUE, message=FALSE}
+modfRF
+confusionMatrix(dataTrainValidation$classe,predict(modfRF,dataTrainValidation[,-53]))
+```
+
+## Training with partition trees
+training with partition trees
+```{r rpart,echo=TRUE, results='hide', message=FALSE}
+modfRPART<-train(classe~., data = dataTrain, method='rpart', trControl=tc, preProcess=c('center','scale'),tuneGrid=data.frame(cp=0.0001))
+```
+partition trees model accuracy
+```{r rpartAc,echo=TRUE, message=FALSE}
+modfRPART
+confusionMatrix(dataTrainValidation$classe,predict(modfRPART,dataTrainValidation[,-53]))
+```
+## Training with gradient boosting machine
+training with gradient boosting machine
+```{r gbm,echo=TRUE, results='hide', message=FALSE}
+modfGBM<-train(classe~., data = dataTrain, method='gbm', trControl=tc, preProcess=c('center','scale'))
+
+```
+gradient boosting machine model accuracy
+```{r gmbAc,echo=TRUE, message=FALSE}
+modfGBM
+confusionMatrix(dataTrainValidation$classe,predict(modfGBM,dataTrainValidation[,-53]))
+```
+## Conclusion
+Comparing the accuracies of all five models we can see that "random forest" has the best results. Therefore we can apply it on the test data.
+```{r testdata, echo=TRUE}
+predict(modfRF,TestData)
+```
